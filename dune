@@ -1,0 +1,4 @@
+(library
+ (name compact)
+ (libraries imp generics)
+ (modules Compact))

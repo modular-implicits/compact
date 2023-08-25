@@ -1,0 +1,21 @@
+opam-version: "2.0"
+name: "compact"
+synopsis: "??"
+version: "dev"
+maintainer: "yallop@gmail.com"
+authors: ["Patrick Reader"]
+homepage: "https://github.com/modular-implicits/oi"
+dev-repo: "git+https://github.com/modular-implicits/oi.git"
+bug-reports: "http://github.com/modular-implicits/oi/issues"
+license: "GPL-3.0-only"
+build: [
+  ["dune" "subst"] {dev}
+  ["dune" "build" "-p" name "-j" jobs]
+  ["dune" "runtest" "-p" name "-j" jobs] {with-test}
+]
+depends: [
+   "dune" {build}
+   "ocaml-variants"
+     { = "4.02.1+modular-implicits+let_syntax" }
+   "imp"
+]
