@@ -1,4 +1,4 @@
-open Generics
+module Generic = Generics_core
 
 let ((lor), (land), (asr), (lsr), (lsl), (lxor), lnot, zero, one) = Int64.
   (logor, logand, shift_right, shift_right_logical, shift_left, logxor, lognot, of_int 0, of_int 1)

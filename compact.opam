@@ -14,8 +14,8 @@ build: [
   ["dune" "runtest" "-p" name "-j" jobs] {with-test}
 ]
 depends: [
-   "dune" {build}
-   "ocaml-variants"
-     { = "4.02.1+modular-implicits+let_syntax" }
-   "imp"
+  "dune" {build}
+  "ocaml-variants"
+     { = "4.02.1+modular-implicits-ber" }
+  "generics-core"
 ]
