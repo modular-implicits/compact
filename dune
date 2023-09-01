@@ -1,4 +1,4 @@
 (library
  (name compact)
- (libraries generics-core)
+ (libraries generics-core imp dynlink metaocaml)
  (modules Compact))

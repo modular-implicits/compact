@@ -4,9 +4,9 @@ synopsis: "??"
 version: "dev"
 maintainer: "yallop@gmail.com"
 authors: ["Patrick Reader"]
-homepage: "https://github.com/modular-implicits/oi"
-dev-repo: "git+https://github.com/modular-implicits/oi.git"
-bug-reports: "http://github.com/modular-implicits/oi/issues"
+homepage: "https://github.com/modular-implicits/compact"
+dev-repo: "git+https://github.com/modular-implicits/compact.git"
+bug-reports: "http://github.com/modular-implicits/compact/issues"
 license: "GPL-3.0-only"
 build: [
   ["dune" "subst"] {dev}
@@ -18,4 +18,5 @@ depends: [
   "ocaml-variants"
      { = "4.02.1+modular-implicits-ber" }
   "generics-core"
+  "imp"
 ]
