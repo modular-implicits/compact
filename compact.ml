@@ -52,81 +52,107 @@ implicit module Option {A: Any}
   >.
 end
 
-module type Sized = sig
-  (* Compute some notion of "size", in arbitrary units.
-     This will bare little relation to the actual amount of memory the object takes up.
-   *)
+let ((lor), (land), (lsr), (lsl), (lxor), lnot, zero, one) = Int64.
+  (logor, logand, shift_right_logical, shift_left, logxor, lognot, of_int 0, of_int 1)
+
+type bits = int64
+
+module type Compact = sig
   type t
-  val size : t -> int
+
+  (* must be <= 64 *)
+  val bit_width : int
+
+  (* must produce a value with set bits only in the `bit_width` least-significant bits *)
+  val encode : t -> bits
+
+  (* must only consider the `bit_width` least-significant bits *)
+  val decode : bits -> t
 end
 
-module type Sized_ = sig
+module type Compact_ = sig
   type t
-  val size : t code -> int code
+  val bit_width : int
+  val encode : t code -> bits code
+  val decode : bits code -> t code
 end
 
-implicit module Sized_Product
+implicit module Compact_Product
   {P: Product}
-  {A: Sized_ with type t = P.a}
-  {B: Sized_ with type t = P.b}
-  : Sized_ with type t = P.t
+  {A: Compact_ with type t = P.a}
+  {B: Compact_ with type t = P.b}
+  : Compact_ with type t = P.t
 = struct
   type t = P.t
-  let size x =
+  let bit_width = A.bit_width + B.bit_width
+  let encode x =
     let (a, b) = P.deconstruct x in
-    .< .~(A.size a) + .~(B.size b) >.
+    .< .~(A.encode a) lsl B.bit_width lor .~(B.encode b) >.
+  let decode n =
+    let b = B.decode n in
+    let a = A.decode .< .~n lsr B.bit_width >. in
+    P.construct a b
 end
 
-implicit module Sized_Sum
+implicit module Compact_Sum
   {S: Sum}
-  {A: Sized_ with type t = S.a}
-  {B: Sized_ with type t = S.b}
-  : Sized_ with type t = S.t
+  {A: Compact_ with type t = S.a}
+  {B: Compact_ with type t = S.b}
+  : Compact_ with type t = S.t
 = struct
   type t = S.t
-  let size x = 
-    .< 1 + .~(S.match_ A.size B.size x) >.
+  let bit_width = 1 + max A.bit_width B.bit_width
+  let encode x =
+    let encode_a a = .< .~(A.encode a) lsl 1 lor zero >. in
+    let encode_b b = .< .~(B.encode b) lsl 1 lor one >. in
+    S.match_ encode_a encode_b x
+  let decode n =
+    let n' = .< .~n lsr 1 >. in .<
+    if .~n land one = zero
+    then .~(S.construct_a (A.decode n'))
+    else .~(S.construct_b (B.decode n'))
+  >.
 end
 
 (* The __basic__ marker acts as a "stop" for the implicit module resolver.
-   Without it, the implicit functors Sized_ and Sized_Basic would form an infinite loop
+   Without it, the implicit functors Compact_ and Compact_Basic would form an infinite loop
  *)
-module type Sized_Basic = sig
-  include Sized
+module type Compact_Basic = sig
+  include Compact
   val __basic__ : unit
 end
 
-implicit module Sized_Basic
-  {T: Sized_Basic}
-  : Sized_ with type t = T.t = struct
+implicit module Compact_Basic
+  {T: Compact_Basic}
+  : Compact_ with type t = T.t = struct
   type t = T.t
-  let size x = .< T.size .~x >.
+  let bit_width = T.bit_width
+  let encode x = .< T.encode .~x >.
+  let decode n = .< T.decode .~n >.
 end
 
-implicit module Sized_Unit : Sized_Basic with type t = unit = struct
+implicit module Compact_Unit : Compact_Basic with type t = unit = struct
   type t = unit
   let __basic__ = ()
-  let size () = 1
+  let bit_width = 0
+  let encode () = zero
+  let decode _ = ()
 end
 
-implicit module Sized_Int : Sized_Basic with type t = int = struct
-  type t = int
+implicit module Compact_Char : Compact_Basic with type t = char = struct
+  type t = char
   let __basic__ = ()
-  let size _ = 4
+  let bit_width = 8
+  let encode x = Int64.of_int (Char.code x)
+  let decode n = Char.chr (Int64.to_int (n land Int64.of_int 255))
 end
 
-implicit module Sized_List {S: Sized} : Sized_Basic with type t = S.t list = struct
-  type t = S.t list
-  let __basic__ = ()
-  (* until we have some way of dealing with inductive types, this will have to do *)
-  let rec size = function
-    | [] -> 1
-    | x :: xs -> 1 + S.size x + size xs
-end
-
-implicit module Sized_ {S: Sized_} : Sized with type t = S.t = struct
+implicit module Compact_ {S: Compact_} : Compact with type t = S.t = struct
   type t = S.t
-  let size x = Runcode.run (S.size .< x >.)
+  let bit_width = S.bit_width
+  let encode x = Runcode.run (S.encode .< x >.)
+  let decode n = Runcode.run (S.decode .< n >.)
 end
 
-let size {S: Sized} x = S.size x
+let encode {S: Compact} x = S.encode x
+let decode {S: Compact} n = S.decode n
