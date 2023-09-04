@@ -3,4 +3,4 @@
  (modules test)
  ; MetaOCaml 4.02 only properly supports bytecode mode
  (modes byte)
- (libraries metaocaml compact dynlink))
+ (libraries compact))
