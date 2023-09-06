@@ -17,6 +17,6 @@ depends: [
   "dune" {build}
   "ocaml-variants"
      { = "4.02.1+modular-implicits-ber" }
-  "generics-core"
+  "staged-generics"
   "imp"
 ]

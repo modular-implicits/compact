@@ -1,4 +1,4 @@
 (library
  (name compact)
- (libraries generics-core imp)
+ (libraries staged-generics imp)
  (modules Compact))

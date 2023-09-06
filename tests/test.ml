@@ -1,5 +1,6 @@
 open Imp.Any
 open Compact
+open implicit Staged_generics.Instances
 
 let thing : (char * char) option = Some ('a', 'x')
 
