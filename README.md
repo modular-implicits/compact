@@ -15,6 +15,8 @@ like how the Haskell compiler can derive [Generic](https://hackage.haskell.org/p
 **Warning:** (unlike serde, which is a fully-featured framework) compact is not remotely production-ready.
 Its encodings are pretty stupid, and cannot be relied upon to be the same across different versions of the OCaml
 compiler, or of the compact or staged-generics libraries.
+Furthermore, it doesn't work for types that can be an arbitrary length (like lists), and can't even encode things that
+take more than 63 bits.
 
 ## Build instructions
 Compact requires OCaml with both the [modular implicits](https://github.com/ocamllabs/ocaml-modular-implicits)
