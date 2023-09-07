@@ -1,99 +1,106 @@
-module Generic = Generics_core
+open Staged_generics.Classes
 
-let ((lor), (land), (asr), (lsr), (lsl), (lxor), lnot, zero, one) = Int64.
-  (logor, logand, shift_right, shift_right_logical, shift_left, logxor, lognot, of_int 0, of_int 1)
+let ((lor), (land), (lsr), (lsl), (lxor), lnot, zero, one) = Int64.
+  (logor, logand, shift_right_logical, shift_left, logxor, lognot, of_int 0, of_int 1)
+
+type bits = int64
 
 module type Compact = sig
   type t
 
-  (* must return a number between 0 and 2^bit_width *)
-  val compress : t -> int64
-
-  (* must only depend on the 2^bit_width least significant bits *)
-  val decompress : int64 -> t
-
-  (* TODO: is int64 overflow defined behaviour in ocaml? *)
   (* must be <= 64 *)
   val bit_width : int
+
+  (* must produce a value with set bits only in the `bit_width` least-significant bits *)
+  val encode : t -> bits
+
+  (* must only consider the `bit_width` least-significant bits *)
+  val decode : bits -> t
 end
 
-implicit module Compact_Char: Compact with type t = char = struct
-  type t = char
-  let compress x = Int64.of_int (Char.code x)
-  let decompress x = Char.chr (Int64.to_int x)
-  let bit_width = 8
+module type Compact_ = sig
+  type t
+  val bit_width : int
+  val encode : t code -> bits code
+  val decode : bits code -> t code
 end
 
-implicit module Compact_Unit : Compact with type t = unit
+implicit module Compact_Product
+  {P: Product}
+  {A: Compact_ with type t = P.a}
+  {B: Compact_ with type t = P.b}
+  : Compact_ with type t = P.t
 = struct
-  type t = unit
-  let compress () = zero
-  let decompress _ = ()
-  let bit_width = 0
+  type t = P.t
+  let bit_width = A.bit_width + B.bit_width
+  let encode x =
+    let (a, b) = P.deconstruct x in
+    .< .~(A.encode a) lsl B.bit_width lor .~(B.encode b) >.
+  let decode n =
+    let b = B.decode n in
+    let a = A.decode .< Int64.shift_right_logical .~n B.bit_width >. in
+    P.construct a b
 end
 
-implicit module Compact_Sum {X: Compact} {Y: Compact} :
-  Compact with type t = (X.t, Y.t) Generic.sum
+implicit module Compact_Sum
+  {S: Sum}
+  {A: Compact_ with type t = S.a}
+  {B: Compact_ with type t = S.b}
+  : Compact_ with type t = S.t
 = struct
-  type t = (X.t, Y.t) Generic.sum
-
-  (* note: if x and y don't have the same bit width, we just implicitly left-pad with 0s
-     e.g. if x is 5 bits wide and y is 7 bits wide, then:
-
-     Left x  -> 00xxxxx0
-     Right y -> yyyyyyy1
-   *)
-
-  let compress = function
-    | Generic.Left x -> X.compress x lsl 1 lor zero
-    | Generic.Right y -> Y.compress y lsl 1 lor one
-
-  let decompress c =
-    let flag = c land one in
-    let c' = c lsr 1 in
-    if flag = zero
-    then Generic.Left (X.decompress c')
-    else Generic.Right (Y.decompress c')
-
-  let bit_width = 1 + max X.bit_width Y.bit_width
+  type t = S.t
+  let bit_width = 1 + max A.bit_width B.bit_width
+  let encode x =
+    let encode_a (a: S.a code): bits code = .< (.~((A.encode a): bits code): bits) lsl 1 lor zero >. in
+    let encode_b (b: S.b code): bits code = .< .~(B.encode b) lsl 1 lor one >. in
+    S.match_ encode_a encode_b x
+  let decode n =
+    let n' = .< .~n lsr 1 >. in .<
+    if .~n land one = zero
+    then .~(S.construct_a (A.decode n'))
+    else .~(S.construct_b (B.decode n'))
+  >.
 end
 
-implicit module Compact_Prod {X: Compact} {Y: Compact} :
-  Compact with type t = (X.t, Y.t) Generic.prod
-= struct
-  type t = (X.t, Y.t) Generic.prod
-
-  let compress (Generic.Prod (x, y)) =
-    X.compress x lsl Y.bit_width lor Y.compress y
-
-  let decompress c =
-    Generic.Prod (X.decompress (c lsr Y.bit_width), Y.decompress c)
-
-  let bit_width = X.bit_width + Y.bit_width
-end
-
-implicit module Compact_Basic {X: Compact} :
-  Compact with type t = X.t Generic.basic
-= struct
-  type t = X.t Generic.basic
-  let compress (Generic.Basic (_, x)) = X.compress x
-  (* TODO: what to do about the label here? *)
-  let decompress c = Generic.Basic ("%decompressed", (X.decompress c))
-  let bit_width = X.bit_width
-end
-
-(* not marked implicit to avoid overlapping instances
-   You can opt-in if you want to use this, by writing:
-    ```
-    let implicit module Compact_Generic = Compact_Generic in
-    (* ... *)
-    ```
+(* The __basic__ marker acts as a "stop" for the implicit module resolver.
+   Without it, the implicit functors Compact_ and Compact_Basic would form an infinite loop
  *)
-module Compact_Generic {X: Generic.Generic} {XRep: Compact with type t = X.rep}
-  : Compact with type t = X.t
-= struct
-  type t = X.t
-  let compress x = XRep.compress (X.toRep x)
-  let decompress c = X.fromRep (XRep.decompress c)
-  let bit_width = XRep.bit_width
+module type Compact_Basic = sig
+  include Compact
+  val __basic__ : unit
 end
+
+implicit module Compact_Basic
+  {T: Compact_Basic}
+  : Compact_ with type t = T.t = struct
+  type t = T.t
+  let bit_width = T.bit_width
+  let encode x = .< T.encode .~x >.
+  let decode n = .< T.decode .~n >.
+end
+
+implicit module Compact_Unit : Compact_Basic with type t = unit = struct
+  type t = unit
+  let __basic__ = ()
+  let bit_width = 0
+  let encode () = zero
+  let decode _ = ()
+end
+
+implicit module Compact_Char : Compact_Basic with type t = char = struct
+  type t = char
+  let __basic__ = ()
+  let bit_width = 8
+  let encode x = Int64.of_int (Char.code x)
+  let decode n = Char.chr (Int64.to_int (n land Int64.of_int 255))
+end
+
+implicit module Compact_ {S: Compact_} : Compact with type t = S.t = struct
+  type t = S.t
+  let bit_width = S.bit_width
+  let encode x = Runcode.run (S.encode .< x >.)
+  let decode n = Runcode.run (S.decode .< n >.)
+end
+
+let encode {S: Compact} x = S.encode x
+let decode {S: Compact} n = S.decode n
